@@ -1,0 +1,88 @@
+<idea-plugin>
+  <id>com.github.mjstewart.typescript-type-assist</id>
+  <name>Typescript Type Assist</name>
+  <version>1.0</version>
+  <vendor url="https://github.com/mjstewart/typescript-type-assist">Matt Stewart</vendor>
+
+  <description><![CDATA[
+      This typescript plugin enhances existing documentation and provides code generation for object properties.
+      The following features are available.
+
+      <ul>
+       <li>Documentation explaining the <b>shape</b> of non class types.</li>
+       <li>Code generation for objects containing properties such as an interface or type alias.</li>
+       <li>Assign a property value to a local variable including type information.</li>
+       <li>Customisable code style settings and syntax coloring.</li>
+      </ul>
+
+      <h3>Unsupported</h3>
+      <ul>
+       <li>Classes fall outside the scope of being basic type as they contain implementation details.</li>
+       <li>The contents of a namespace.</li>
+       <li>Display the documentation of inherited types within the sub type.</li>
+      </ul>
+    ]]></description>
+
+  <change-notes><![CDATA[
+      <ul>
+       <li>1.0 Initial release.</li>
+      </ul>
+    ]]>
+  </change-notes>
+
+  <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/build_number_ranges.html for description -->
+  <idea-version since-build="145"/>
+
+  <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
+       on how to target different products -->
+  <depends>com.intellij.modules.lang</depends>
+  <depends>JavaScript</depends>
+  <depends>com.intellij.css</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <!-- Add your extensions here -->
+    <lang.documentationProvider language="TypeScript" order="first" id="TypeAssistDocumentationProvider" implementationClass="documentation.TypeAssistDocumentationProvider"/>
+    <applicationConfigurable groupId="tools" id="TypeAssistSettingsConfigurable" displayName="TypeScript Type Assist" instance="settings.TypeAssistApplicationSettingsConfigurable"/>
+    <applicationService id="TypeAssistSettings" serviceInterface="settings.TypeAssistApplicationSettings" serviceImplementation="settings.TypeAssistApplicationSettings"/>
+
+    <intentionAction>
+      <className>intentions.ImplementPropertyIntention</className>
+      <category>Typescript Type Assist</category>
+    </intentionAction>
+    <intentionAction>
+      <className>intentions.ShowDocumentationIntention</className>
+      <category>Typescript Type Assist</category>
+    </intentionAction>
+    <intentionAction>
+      <className>intentions.ResolveArrayTypeIntention</className>
+      <category>Typescript Type Assist</category>
+    </intentionAction>
+    <intentionAction>
+      <className>intentions.WrapExpressionInStringIntention</className>
+      <category>Typescript Type Assist</category>
+    </intentionAction>
+    <intentionAction>
+      <className>intentions.AssignVariableIntention</className>
+      <category>Typescript Type Assist</category>
+    </intentionAction>
+  </extensions>
+
+  <actions>
+    <!-- Add your actions here -->
+    <action id="actions.ShowDocumentationAction"
+            class="actions.ShowDocumentationAction"
+            text="Show typescript docs"
+            description="Displays typescript docs"
+            icon="PluginIcons.TS_ASSIST">
+      <add-to-group group-id="GenerateGroup" anchor="first"/>
+    </action>
+
+    <action id="actions.CreateTypeScriptObjectAction"
+            class="actions.CreateTypeScriptObjectAction"
+            text="Create object"
+            description="Generates an object containing all properties declared in target type"
+            icon="PluginIcons.TS_ASSIST">
+      <add-to-group group-id="GenerateGroup" anchor="first"/>
+    </action>
+  </actions>
+</idea-plugin>
