@@ -49,7 +49,19 @@ public class CodeGeneratorCollector implements Collector<TypeScriptObjectPropert
             // Turn into a js string so the user knows the types they need to implement. Additional tooling will use
             // this as a marker to draw highlights etc.
             String styleToken = typeAssistApplicationSettings.STRING_STYLE.getStyleToken();
-            String type = styleToken + propertyValue.getPropertyType() + styleToken;
+
+            String type;
+            if (propertyValue.getPropertyType().contains(" ")) {
+                /*
+                 * Could be a union type which requires all values to be wrapped in a single string for highlighting.
+                 * Its simpler to escape string using double quote which relies upon only single quotes existing.
+                 */
+                type = propertyValue.getPropertyType().replaceAll("[\"]", "'");
+                type = "\"" + type  + "\"";
+            } else {
+                type = styleToken + propertyValue.getPropertyType() + styleToken;
+            }
+
             String propertyName = propertyValue.getCodeGenPropertyName().orElse(MISSING_PROPERTY_NAME);
             sb.append(propertyName).append(": ").append(type).append(",").append("\n");
         };
