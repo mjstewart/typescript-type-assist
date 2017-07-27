@@ -1,5 +1,7 @@
 # Typescript type assist
 
+[![Youtube demo](https://github.com/mjstewart/typescript-type-assist/blob/master/resources/plugin-demo.png)](https://www.youtube.com/watch?v=wXIGN6lF8JI&feature=youtu.be "Plugin demo")
+
 Typescript plugin for jetbrains IDE's including intellij and webstorm.
 
 This typescript plugin enhances existing documentation and provides code generation for object properties.
@@ -16,6 +18,10 @@ This typescript plugin enhances existing documentation and provides code generat
 * Classes fall outside the scope of being basic type as they contain implementation details.
 * The contents of a namespace.
 * Display the documentation of inherited types within the sub type.
+
+### Installation
+1. settings > plugins > browse repositories > search for 'typescript type assist'
+2. Alternatively download the `typescript-type-assist.jar` and go to settings > plugins > install plugin from disk. 
 
 ### Issues
 
