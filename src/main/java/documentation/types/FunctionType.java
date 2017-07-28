@@ -8,7 +8,12 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Optional;
 
 /**
- * Example: type NameResolver = () => string;
+ * Examples
+ *
+ * <pre>
+ *     type NameResolver = () => string
+ *     (a: string, b: string) => string
+ * </pre>
  *
  * Created by matt on 28-Jun-17.
  */

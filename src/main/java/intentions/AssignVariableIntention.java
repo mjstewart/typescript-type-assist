@@ -4,6 +4,7 @@ import com.intellij.codeInsight.intention.HighPriorityAction;
 import com.intellij.codeInsight.intention.PsiElementBaseIntentionAction;
 import com.intellij.lang.javascript.psi.JSExpressionStatement;
 import com.intellij.lang.javascript.psi.JSReferenceExpression;
+import com.intellij.lang.javascript.psi.JSType;
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptPropertySignature;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Caret;
@@ -40,7 +41,7 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
                 TypeScriptPropertySignature property = (TypeScriptPropertySignature) resolvedElement;
 
                 String varType = TypeAssistApplicationSettings.getInstance().VARIABLE_DECLARATION.getCode();
-                String type = property.getType() == null ? "any" : property.getType().getTypeText();
+                String type = property.getType() == null ? "any" : property.getType().getTypeText(JSType.TypeTextFormat.CODE);
                 String assignment = varType + " " + property.getMemberName() + ": " + type + " = " + expression.getText();
 
                 Caret caret = editor.getCaretModel().getCurrentCaret();
@@ -55,7 +56,6 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
                 });
             }
         }
-
     }
 
     @Override

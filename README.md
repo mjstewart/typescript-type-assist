@@ -18,11 +18,21 @@ This typescript plugin enhances existing documentation and provides code generat
 * Classes fall outside the scope of being basic type as they contain implementation details.
 * The contents of a namespace.
 * Display the documentation of inherited types within the sub type.
+* Auto generate properties from inherited types within the sub type.
 
 ### Installation
 1. settings > plugins > browse repositories > search for 'typescript type assist'
 2. Alternatively download the `typescript-type-assist.jar` and go to settings > plugins > install plugin from disk. 
 
-### Issues
+### FAQ
 
-All IDE versions 2017.2 - The custom plugin icon is not displayed for intentions.
+* Is there any reason why intentions don't show the custom plugin icon?
+
+This appears to be a problem with all 2017 IDE versions.
+
+* Sometimes when I click a documentation hyperlink nothing happens
+
+This can occur if the IDE cannot resolve the type. This may happen if there is multiple type definitions for the 
+same type.
+
+
