@@ -11,6 +11,7 @@ import documentation.types.TypeDescription;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -91,9 +92,14 @@ public class TypeAssistPsiUtil {
      * @return Optional {@code TypeScriptObjectType}
      */
     public static Optional<TypeScriptObjectType> getChildTypeScriptObject(@NotNull PsiElement psiElement) {
-        Optional<TypeScriptObjectType> child = Optional.ofNullable(PsiTreeUtil.findChildOfType(psiElement, TypeScriptObjectType.class));
-        if (!child.isPresent()) return Optional.empty();
-        return (isValidTypeScriptObject(child.get())) ? child : Optional.empty();
+        // Handles edge case where there is an object in parameter list such as 'interface StatelessComponent<P = {}>'
+        Optional<TypeScriptObjectType> objectType =
+                PsiTreeUtil.findChildrenOfType(psiElement, TypeScriptObjectType.class).stream()
+                .filter(type -> PsiTreeUtil.getTopmostParentOfType(type, TypeScriptTypeParameterList.class) == null)
+                .findFirst();
+
+        if (!objectType.isPresent()) return Optional.empty();
+        return (isValidTypeScriptObject(objectType.get())) ? objectType : Optional.empty();
     }
 
     /**
