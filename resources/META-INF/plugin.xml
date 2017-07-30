@@ -11,7 +11,7 @@
       <ul>
        <li>Documentation explaining the <b>shape</b> of non class types.</li>
        <li>Code generation for objects containing properties such as an interface or type alias.</li>
-       <li>Assign a property value to a local variable including type information.</li>
+       <li>Local variable assignment without type information.</li>
        <li>Customisable code style settings and syntax coloring.</li>
       </ul>
 
@@ -62,7 +62,7 @@
       <category>Typescript Type Assist</category>
     </intentionAction>
     <intentionAction>
-      <className>intentions.AssignVariableIntention</className>
+      <className>intentions.variableAssignment.AssignUntypedLocalVariableIntention</className>
       <category>Typescript Type Assist</category>
     </intentionAction>
   </extensions>

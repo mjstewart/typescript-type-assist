@@ -1,0 +1,5 @@
+function multiply(a: number): (b: number) => number {
+    return (b: number) => a * b;
+}
+
+multiply(5)

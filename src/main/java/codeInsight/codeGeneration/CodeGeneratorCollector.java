@@ -48,7 +48,6 @@ public class CodeGeneratorCollector implements Collector<TypeScriptObjectPropert
         return (sb, propertyValue) -> {
             // Turn into a js string so the user knows the types they need to implement. Additional tooling will use
             // this as a marker to draw highlights etc.
-            String styleToken = typeAssistApplicationSettings.STRING_STYLE.getStyleToken();
 
             String type;
             if (propertyValue.getPropertyType().contains(" ")) {
@@ -57,9 +56,9 @@ public class CodeGeneratorCollector implements Collector<TypeScriptObjectPropert
                  * Its simpler to escape string using double quote which relies upon only single quotes existing.
                  */
                 type = propertyValue.getPropertyType().replaceAll("[\"]", "'");
-                type = "\"" + type  + "\"";
+                type = wrapInQuotes(type);
             } else {
-                type = styleToken + propertyValue.getPropertyType() + styleToken;
+                type = wrapInQuotes(propertyValue.getPropertyType());
             }
 
             String propertyName = propertyValue.getCodeGenPropertyName().orElse(MISSING_PROPERTY_NAME);
@@ -76,7 +75,8 @@ public class CodeGeneratorCollector implements Collector<TypeScriptObjectPropert
     public Function<StringBuilder, String> finisher() {
         return generatedCodeBuilder -> {
             String generatedCode = generatedCodeBuilder.toString();
-            generatedCode = typeAssistApplicationSettings.TRAILING_COMMAS ? generatedCode : CodeGenerator.removeDanglingComma(generatedCode);
+            generatedCode = typeAssistApplicationSettings.TRAILING_COMMAS ? generatedCode :
+                    CodeGenerator.removeDanglingComma(generatedCode);
 
             return new StringBuilder()
                     .append(preCode.get())
@@ -89,5 +89,9 @@ public class CodeGeneratorCollector implements Collector<TypeScriptObjectPropert
     @Override
     public Set<Characteristics> characteristics() {
         return EnumSet.noneOf(Characteristics.class);
+    }
+
+    private String wrapInQuotes(String value) {
+        return String.format("%s%s%s", "\"", value, "\"");
     }
 }

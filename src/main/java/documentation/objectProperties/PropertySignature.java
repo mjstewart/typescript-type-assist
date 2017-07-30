@@ -25,7 +25,7 @@ public class PropertySignature extends TypeScriptObjectProperty {
         /*
          * Optional is safe as all paths in getDocumentationPropertyName return a valid optional.
          * An Optional needs to be returned as other TypeScriptObjectProperty return empty.
-         * The full property signature gets transformed by the TypeAssistDocumentationProvider formatter.
+         * The full property getSignature gets transformed by the TypeAssistDocumentationProvider formatter.
          */
         return getDocumentationPropertyName().get() + (isOptional() ? "?" : "") + ": " + getPropertyType();
     }

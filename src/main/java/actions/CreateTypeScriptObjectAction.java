@@ -65,7 +65,6 @@ public class CreateTypeScriptObjectAction extends AnAction {
         }
 
         Document document = editor.getDocument();
-
         TypeDescription typeDescription = TypeDescription.create(psiElement);
 
         if (!typeDescription.isValid()) return;
@@ -92,7 +91,6 @@ public class CreateTypeScriptObjectAction extends AnAction {
             formatAndHighlight(insertInstruction, anActionEvent, typeAssistApplicationSettings);
         });
     }
-
 
     @Override
     public void update(AnActionEvent e) {

@@ -1,4 +1,4 @@
-import documentation.HtmlUtils;
+import documentation.textReplacement.HtmlUtils;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;

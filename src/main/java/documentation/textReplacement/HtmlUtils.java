@@ -1,4 +1,4 @@
-package documentation;
+package documentation.textReplacement;
 
 import java.util.function.Function;
 

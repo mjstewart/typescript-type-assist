@@ -1,6 +1,6 @@
 # Typescript type assist
 
-[![Youtube demo](https://github.com/mjstewart/typescript-type-assist/blob/master/resources/plugin-demo.png)](https://www.youtube.com/watch?v=wXIGN6lF8JI&feature=youtu.be "Plugin demo")
+[![Youtube demo](https://github.com/mjstewart/typescript-type-assist/blob/master/resources/plugin-demo.png)](https://www.youtube.com/watch?v=i0zy-YHzBFQ&feature=youtu.be "Plugin demo")
 
 Typescript plugin for jetbrains IDE's including intellij and webstorm.
 
@@ -10,7 +10,7 @@ This typescript plugin enhances existing documentation and provides code generat
 
 * Documentation explaining the **shape** of non class types.
 * Code generation for objects containing properties such as an interface or type alias.
-* Assign a property value to a local variable including type information.
+* Local variable assignment without type information.
 * Customisable settings for code style and documentation syntax colouring.
 
 ##### Unsupported
@@ -21,14 +21,13 @@ This typescript plugin enhances existing documentation and provides code generat
 * Auto generate properties from inherited types within the sub type.
 
 ### Installation
-1. settings > plugins > browse repositories > search for 'typescript type assist'
-2. Alternatively download the `typescript-type-assist.jar` and go to settings > plugins > install plugin from disk. 
+Download the `typescript-type-assist.jar` and go to settings > plugins > install plugin from disk. 
 
 ### FAQ
 
 * Is there any reason why intentions don't show the custom plugin icon?
 
-This appears to be a problem with all 2017 IDE versions.
+Will be fixed in future IDE versions https://youtrack.jetbrains.com/issue/IJSDK-292
 
 * Sometimes when I click a documentation hyperlink nothing happens
 

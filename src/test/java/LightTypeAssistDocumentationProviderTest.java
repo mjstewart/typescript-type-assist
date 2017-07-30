@@ -1,12 +1,12 @@
 import com.intellij.codeInsight.documentation.DocumentationManagerUtil;
 import com.intellij.testFramework.fixtures.LightCodeInsightFixtureTestCase;
-import documentation.HtmlUtils;
+import documentation.textReplacement.*;
 import documentation.TypeAssistDocumentationProvider;
-import io.netty.util.internal.StringUtil;
 import settings.TypeAssistApplicationSettings;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
@@ -29,20 +29,23 @@ public class LightTypeAssistDocumentationProviderTest extends LightCodeInsightFi
 
     public void test_toTypeName_NoGenericParameters_IsNotReplaced() {
         /*
-         * typeName contains no generic parameters and is resolvable. Person should get replaced with a hyperlink as
+         * typeName contains no generic parameters and is resolvable. Person should not get replaced with a hyperlink as
          * it makes no sense to recursively link back to self.
          *
          * No white space is tested as toTypeName is provided a perfectly formed string built by TypeDescription.
          */
-        TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter genericTypeParameter =
-                TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter.of(Collections.emptyList());
+        FindReplaceGenericTypeParameter genericTypeParameter =
+                FindReplaceGenericTypeParameter.of(Collections.emptyList());
 
+        // FindReplaceValue doesn't need the exact values
         String typeName = "Person";
-        TypeAssistDocumentationProvider.FindReplaceResolvableReference resolvableReference =
-                TypeAssistDocumentationProvider.FindReplaceResolvableReference.of(Arrays.asList(typeName), typeName);
 
-        TypeAssistDocumentationProvider.FindReplacePairs findReplacePairs =
-                TypeAssistDocumentationProvider.FindReplacePairs.of(resolvableReference, genericTypeParameter);
+        List<FindReplaceValue> resolvableReferenceTypes = Arrays.asList(FindReplaceValue.of("Person", FindReplaceValue.wordBoundary("Person"), "Person"));
+        FindReplaceResolvableReference resolvableReference =
+                FindReplaceResolvableReference.of(resolvableReferenceTypes, typeName);
+
+        FindReplacePairs findReplacePairs =
+                FindReplacePairs.of(resolvableReference, genericTypeParameter);
 
         assertThat(provider.toTypeName("Person", findReplacePairs), is("Person"));
     }
@@ -54,15 +57,17 @@ public class LightTypeAssistDocumentationProviderTest extends LightCodeInsightFi
          *
          * No white space is tested as toTypeName is provided a perfectly formed string built by TypeDescription.
          */
-        TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter genericTypeParameter =
-                TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter.of(Arrays.asList("T"));
+        FindReplaceGenericTypeParameter genericTypeParameter =
+                FindReplaceGenericTypeParameter.of(Arrays.asList("T"));
 
         String typeName = "Person<T>";
-        TypeAssistDocumentationProvider.FindReplaceResolvableReference resolvableReference =
-                TypeAssistDocumentationProvider.FindReplaceResolvableReference.of(Arrays.asList("Person"), typeName);
 
-        TypeAssistDocumentationProvider.FindReplacePairs findReplacePairs =
-                TypeAssistDocumentationProvider.FindReplacePairs.of(resolvableReference, genericTypeParameter);
+        List<FindReplaceValue> resolvableReferenceTypes = Arrays.asList(FindReplaceValue.of("Person", FindReplaceValue.wordBoundary("Person"), "Person"));
+        FindReplaceResolvableReference resolvableReference =
+                FindReplaceResolvableReference.of(resolvableReferenceTypes, typeName);
+
+        FindReplacePairs findReplacePairs =
+                FindReplacePairs.of(resolvableReference, genericTypeParameter);
 
         String expect = String.format("Person<%s>", HtmlUtils.span("T", settings.GENERICS_HEX_COLOR));
         assertThat(provider.toTypeName("Person<T>", findReplacePairs), is(expect));
@@ -76,20 +81,25 @@ public class LightTypeAssistDocumentationProviderTest extends LightCodeInsightFi
          *
          * No white space is tested as toTypeName is provided a perfectly formed string built by TypeDescription.
          */
-        TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter genericTypeParameter =
-                TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter.of(Arrays.asList("T", "X", "Y", "Z"));
+        FindReplaceGenericTypeParameter genericTypeParameter =
+                FindReplaceGenericTypeParameter.of(Arrays.asList("T", "X", "Y", "Z"));
 
         String typeName =  "Person<T extends Product, X extends number, Y, Z>";
-        TypeAssistDocumentationProvider.FindReplaceResolvableReference resolvableReference =
-                TypeAssistDocumentationProvider.FindReplaceResolvableReference.of(Arrays.asList("Person", "Product"), typeName);
 
-        TypeAssistDocumentationProvider.FindReplacePairs findReplacePairs =
-                TypeAssistDocumentationProvider.FindReplacePairs.of(resolvableReference, genericTypeParameter);
+        FindReplaceValue personReplaceValue = FindReplaceValue.of("Person", FindReplaceValue.wordBoundary("Person"), "Person");
+        FindReplaceValue productReplaceValue = FindReplaceValue.of("Product", FindReplaceValue.wordBoundary("Product"), "Product");
+
+        List<FindReplaceValue> resolvableReferenceTypes = Arrays.asList(personReplaceValue, productReplaceValue);
+        FindReplaceResolvableReference resolvableReference =
+                FindReplaceResolvableReference.of(resolvableReferenceTypes, typeName);
+
+        FindReplacePairs findReplacePairs =
+                FindReplacePairs.of(resolvableReference, genericTypeParameter);
 
         // Product is the resolved type that will receive a hyperlink as it is not part of the type name Person.
-        StringBuilder sb = new StringBuilder();
-        DocumentationManagerUtil.createHyperlink(sb, "Product", "Product", false);
-        String productHyperlink = sb.toString();
+        StringBuilder productLinkBuilder = new StringBuilder();
+        DocumentationManagerUtil.createHyperlink(productLinkBuilder, "Product", "Product", false);
+        String productHyperlink = productLinkBuilder.toString();
 
         String expect = String.format("Person<%s extends %s, %s extends number, %s, %s>",
                 HtmlUtils.span("T", settings.GENERICS_HEX_COLOR),
@@ -115,14 +125,15 @@ public class LightTypeAssistDocumentationProviderTest extends LightCodeInsightFi
          */
         String typeName =  "Tree<T, Tr, Tre>";
 
-        TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter genericTypeParameter =
-                TypeAssistDocumentationProvider.FindReplaceGenericTypeParameter.of(Arrays.asList("T", "Tr", "Tre"));
+        FindReplaceGenericTypeParameter genericTypeParameter =
+                FindReplaceGenericTypeParameter.of(Arrays.asList("T", "Tr", "Tre"));
 
-        TypeAssistDocumentationProvider.FindReplaceResolvableReference resolvableReference =
-                TypeAssistDocumentationProvider.FindReplaceResolvableReference.of(Arrays.asList("Tree"), typeName);
+        List<FindReplaceValue> resolvableReferenceTypes = Arrays.asList(FindReplaceValue.of("Tree", FindReplaceValue.wordBoundary("Tree"), "Tree"));
+        FindReplaceResolvableReference resolvableReference =
+                FindReplaceResolvableReference.of(resolvableReferenceTypes, typeName);
 
-        TypeAssistDocumentationProvider.FindReplacePairs findReplacePairs =
-                TypeAssistDocumentationProvider.FindReplacePairs.of(resolvableReference, genericTypeParameter);
+        FindReplacePairs findReplacePairs =
+                FindReplacePairs.of(resolvableReference, genericTypeParameter);
 
         String expect = String.format("Tree<%s, %s, %s>",
                 HtmlUtils.span("T", settings.GENERICS_HEX_COLOR),

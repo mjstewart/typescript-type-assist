@@ -1,7 +1,6 @@
 package documentation;
 
 import codeInsight.TypeAssistPsiUtil;
-import com.intellij.codeInsight.documentation.DocumentationManagerUtil;
 import com.intellij.lang.documentation.AbstractDocumentationProvider;
 import com.intellij.lang.javascript.documentation.JSDocumentationProvider;
 import com.intellij.openapi.editor.Editor;
@@ -12,6 +11,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
 import documentation.objectProperties.TypeScriptObjectProperty;
 import documentation.objectProperties.TypeScriptObjectPropertyGroup;
+import documentation.textReplacement.*;
 import documentation.types.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -22,10 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * https://github.com/JetBrains/intellij-community/blob/master/platform/lang-api/src/com/intellij/lang/documentation/DocumentationProvider.java
@@ -77,7 +75,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
     /**
      * Replaces all readonly keywords with the equivalent html span.
      *
-     * @param value The value to format such as the full type signature.
+     * @param value The value to format such as the full type getSignature.
      * @return The formatted String should readonly exist otherwise the supplied value without modification.
      */
     public String replaceReadOnly(String value) {
@@ -94,7 +92,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
      */
     public String replaceUnspecifiedTypes(String value) {
         for (FindReplaceValue replaceValue : getUnspecifiedTypeReplacements()) {
-            value = value.replaceAll(replaceValue.regexSearchKey, replaceValue.replacementValue);
+            value = value.replaceAll(replaceValue.getRegexSearchKey(), replaceValue.getReplacementValue());
         }
         return value;
     }
@@ -123,7 +121,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
      * <p>String replacement is used as its simpler than recreating the complete type based on going through the
      * {@code PsiElement}.</p>
      *
-     * @param value The value to format such as the full type signature.
+     * @param value The value to format such as the full type getSignature.
      * @return The formatted String should any optionals exist otherwise the supplied value without modification.
      */
     public String replaceOptionals(String value) {
@@ -195,8 +193,8 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
      */
     public String toTypeName(String value,
                              FindReplacePairs findReplacePairs) {
-        for (FindReplaceValue replaceValue : findReplacePairs.replacementPairs) {
-            value = value.replaceAll(replaceValue.regexSearchKey, replaceValue.replacementValue);
+        for (FindReplaceValue replaceValue : findReplacePairs.getReplacementPairs()) {
+            value = value.replaceAll(replaceValue.getRegexSearchKey(), replaceValue.getReplacementValue());
         }
         return value;
     }
@@ -217,8 +215,8 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
     private String toDocumentationType(DescribableType describableType,
                                        FindReplacePairs findReplacePairs) {
         String formattedType = getFormatter().apply(describableType.getType()) + HtmlUtils.newLine();
-        for (FindReplaceValue replaceValue : findReplacePairs.replacementPairs) {
-            formattedType = formattedType.replaceAll(replaceValue.regexSearchKey, replaceValue.replacementValue);
+        for (FindReplaceValue replaceValue : findReplacePairs.getReplacementPairs()) {
+            formattedType = formattedType.replaceAll(replaceValue.getRegexSearchKey(), replaceValue.getReplacementValue());
         }
         return formattedType;
     }
@@ -245,7 +243,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
         if (typeDescription.isValid()) {
             // Always substitute in hyperlinks for resolvable types regardless of whether syntax highlighting is on.
             FindReplaceResolvableReference findReplaceResolvableReference =
-                    FindReplaceResolvableReference.of(TypeAssistPsiUtil.collectResolvableReferenceNames(element), typeDescription.getTypeName());
+                    FindReplaceResolvableReference.of(TypeAssistPsiUtil.collectResolvableReferences(element), typeDescription.getTypeName());
 
             List<String> genericTypeParameters = new ArrayList<>();
             if (settings.DOCUMENTATION_SYNTAX_HIGHLIGHTING) {
@@ -315,6 +313,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
 
         // Standard docs are printed below type information regardless of whether type info exists.
         String standardDocs = new JSDocumentationProvider().generateDoc(element, originalElement);
+
         if (standardDocs != null) {
             docBuilder.append((typeDescription.isValid() ? HtmlUtils.newLine() : ""))
                     .append(HtmlUtils.bold("Standard Documentation"))
@@ -404,144 +403,5 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
                                           Function<TypeScriptObjectProperty, String> mapper,
                                           Consumer<String> finisher) {
         properties.stream().map(mapper).forEach(finisher);
-    }
-
-    /**
-     * Instructions for finding and replacing a value within the documentation string.
-     */
-    public static class FindReplaceValue {
-        private String originalKey;
-        private String regexSearchKey;
-        private String replacementValue;
-
-        private FindReplaceValue(String originalKey, String regexSearchKey, String replacementValue) {
-            this.originalKey = originalKey;
-            this.regexSearchKey = regexSearchKey;
-            this.replacementValue = replacementValue;
-        }
-
-        public static FindReplaceValue of(String originalKey, String regexSearchKey, String replacementValue) {
-            return new FindReplaceValue(originalKey, regexSearchKey, replacementValue);
-        }
-
-        public static String wordBoundary(String value) {
-            return "\\b" + value + "\\b";
-        }
-
-        @Override
-        public String toString() {
-            return "FindReplaceValue{" +
-                    "originalKey='" + originalKey + '\'' +
-                    ", regexSearchKey='" + regexSearchKey + '\'' +
-                    ", replacementValue='" + replacementValue + '\'' +
-                    '}';
-        }
-    }
-
-    /**
-     * Given a list of resolvable types such as [Person, Address], map them into a list of {@code FindReplaceValue}s
-     * containing the original value, a regex lookup key and replacement value, such that each property within an
-     * object type can be searched and replaced.
-     *
-     * <p>
-     * {@code FindReplaceValue(Person, \\bPerson\\b, hyperlink with Person)}<br>
-     * {@code FindReplaceValue(Address, \\bAddress\\b, hyperlink with Address)}
-     * <p>
-     *
-     * The supplied {@code typeName} is to avoid creating hyperlinks to self for recursive types. For example, the
-     * {@code typeName} here is {@code Tree<T>}. For any resolvable type in {@code resolvableReferenceTypes},
-     * if the start of the {@code FindReplaceValue.regexSearchKey} is found at the beginning of the {@code typeName},
-     * it is excluded from the list of eligible resolvable types to be replaced with a hyperlink.
-     *
-     * <pre>
-     *      interface{@code Tree<T>} {
-     *         value: T
-     *         left:{@code Tree<T>}
-     *         right:{@code Tree<T>}
-     *     }
-     * </pre>
-     */
-    public static class FindReplaceResolvableReference {
-        private List<FindReplaceValue> findReplaceValues;
-
-        private FindReplaceResolvableReference(List<FindReplaceValue> findReplaceValues) {
-            this.findReplaceValues = findReplaceValues;
-        }
-
-        public static FindReplaceResolvableReference of(List<String> resolvableReferenceTypes,
-                                                        String typeName) {
-            /*
-             * Accepts the resolved type and turns it into a hyperlink.
-             * The lookup key must be on a word boundary otherwise sub words could get accidentally get replaced.
-             */
-            Function<String, FindReplaceValue> toReplacementPair = resolvedType -> {
-                StringBuilder sb = new StringBuilder();
-                DocumentationManagerUtil.createHyperlink(sb, resolvedType, resolvedType, false);
-                return FindReplaceValue.of(resolvedType, FindReplaceValue.wordBoundary(resolvedType), sb.toString());
-            };
-
-            // Handle recursive types to avoid hyperlinks to self.
-            Predicate<FindReplaceValue> excludeRefsWithSameTypeName =
-                    value -> !Pattern.compile("^" + value.regexSearchKey).matcher(typeName).find();
-
-            List<FindReplaceValue> replacements = resolvableReferenceTypes.stream()
-                    .map(toReplacementPair)
-                    .filter(excludeRefsWithSameTypeName)
-                    .collect(Collectors.toList());
-
-            return new FindReplaceResolvableReference(replacements);
-        }
-    }
-
-    public static class FindReplaceGenericTypeParameter {
-        private List<FindReplaceValue> findReplaceValues;
-
-        private FindReplaceGenericTypeParameter(List<FindReplaceValue> findReplaceValues) {
-            this.findReplaceValues = findReplaceValues;
-        }
-
-        /**
-         * For all type parameters in the supplied {@code genericTypeParameters}, map into a value object containing
-         * the instructions to execute the find/replace.
-         *
-         * <p>Eg if the List of generic type parameter Strings is [X, Y] then the following elements are created.</p>
-         *
-         * <pre>
-         *     FindReplaceValue(X, \bX\b, <span style="color:#41B8E7">X</span>)
-         *     FindReplaceValue(Y, \bY\b, <span style="color:#41B8E7">Y</span>)
-         * </pre>
-         */
-        public static FindReplaceGenericTypeParameter of(List<String> genericTypeParameters) {
-            TypeAssistApplicationSettings settings = TypeAssistApplicationSettings.getInstance();
-
-            // The lookup key must be on a word boundary otherwise sub words could get accidentally get replaced.
-            Function<String, FindReplaceValue> toReplacementPair = genericType ->
-                    FindReplaceValue.of(genericType, FindReplaceValue.wordBoundary(genericType), HtmlUtils.span(genericType, settings.GENERICS_HEX_COLOR));
-
-            List<FindReplaceValue> replacements = genericTypeParameters.stream()
-                    .map(toReplacementPair).collect(Collectors.toList());
-
-            return new FindReplaceGenericTypeParameter(replacements);
-        }
-    }
-
-    /**
-     * Aggregates all find and replaceable pairs into a single list. {@code toDocumentationType} will iterate
-     * through this list trying to find/replace.
-     */
-    public static class FindReplacePairs {
-        private List<FindReplaceValue> replacementPairs;
-
-        private FindReplacePairs(FindReplaceResolvableReference resolvableReference,
-                                 FindReplaceGenericTypeParameter genericTypeParameter) {
-            replacementPairs = new ArrayList<>();
-            replacementPairs.addAll(resolvableReference.findReplaceValues);
-            replacementPairs.addAll(genericTypeParameter.findReplaceValues);
-        }
-
-        public static FindReplacePairs of(FindReplaceResolvableReference resolvableReference,
-                                          FindReplaceGenericTypeParameter genericTypeParameter) {
-            return new FindReplacePairs(resolvableReference, genericTypeParameter);
-        }
     }
 }

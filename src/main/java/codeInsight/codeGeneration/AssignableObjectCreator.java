@@ -1,8 +1,8 @@
 package codeInsight.codeGeneration;
 
 import com.intellij.openapi.util.text.StringUtil;
-import documentation.types.TypeDescription;
 import documentation.objectProperties.TypeScriptObjectProperty;
+import documentation.types.TypeDescription;
 import settings.TypeAssistApplicationSettings;
 
 import java.util.List;

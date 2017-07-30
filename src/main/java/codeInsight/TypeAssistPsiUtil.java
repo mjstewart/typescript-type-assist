@@ -5,20 +5,20 @@ import com.intellij.lang.javascript.psi.ecma6.*;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiNamedElement;
-import com.intellij.psi.PsiQualifiedReference;
 import com.intellij.psi.util.PsiTreeUtil;
+import documentation.textReplacement.FindReplaceValue;
 import documentation.types.TypeDescription;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * Utilities similar to {@code PsiTreeUtil} but for typescript.
+ * Utilities similar to {@code PsiTreeUtil} but for this TypeScript plugin.
  *
  * Created by matt on 03-Jun-17.
  */
@@ -126,34 +126,54 @@ public class TypeAssistPsiUtil {
         return PsiTreeUtil.getTopmostParentOfType(psiElement, TypeScriptVariable.class) != null;
     }
 
-
     /**
-     * Collects a {@code List} of distinct resolvable reference names which is used to create hyperlinks in the documentation.
-     * Consider the example below where {@code Person} is the only resolvable type which is then replaced with
+     * Example of entries in the returned list.
+     *
+     * <p>{@code FindReplaceValue{originalKey='Status', regexSearchKey='\bStatus\b', replacementValue='Status'}}</p>
+     *
+     * <p>The originalKey represents a resolvable reference name which is used to create hyperlinks in the documentation.
+     * The resulting list is passed into {@code FindReplaceResolvableReference} which performs further validation and
+     * transforms the replacementValue into a hyperlink.</p>
+     *
+     * <p>Consider the example below where {@code Person} is the only resolvable type which is then replaced with
      * a hyperlink for navigation. The returned {@code List} will therefore only contain "Person" allowing the hyperlink
-     * replacement to occur.
+     * replacement to occur.</p>
      *
-     * <p>
-     *     {@code gps: Map<string, Person>}
-     * </p>
+     * <p>This method is isolated as its easy to change how the hyperlink value is created. Some references cannot
+     * be resolved and its possible the URL to the PsiElement isn't correct. See JsDocumentationUtils.appendHyperLinkToElement
+     * for potential implementation.</p>
      *
-     * @param root The {@code PsiElement} to begin searching for elements of type {@code JSReferenceExpression}.
-     * @return The {@code List} of resolvable type names.
+     * @param root The element supplied to {@code TypeAssistDocumentationProvider.generateDoc}
      */
-    public static List<String> collectResolvableReferenceNames(@NotNull PsiElement root) {
+    public static List<FindReplaceValue> collectResolvableReferences(@NotNull PsiElement root) {
         Predicate<JSReferenceExpression> permitTypeFilter = reference -> {
             if (reference.resolve() == null) return false;
             if (reference.resolve() instanceof TypeScriptTypeParameter) return false;
             if (reference.resolve() instanceof TypeScriptMappedTypeParameter) return false;
+            /*
+             * Having a dot can sometimes mess up the replacement logic.
+             * React.ReactElement, if both React and ReactElement are resolvable then there are 2 instructions to
+             * replace React and then replace it again with React.ReactElement.
+             */
+            if (reference.getText().contains(".")) return false;
 
             // it is possible primitive types resolve to their TypeScript wrapper such as Boolean which is to be avoided.
             boolean isPrimitiveByConvention = !StringUtil.isCapitalized(reference.getReferenceName());
             return !isPrimitiveByConvention;
         };
 
+        Function<JSReferenceExpression, Optional<FindReplaceValue>> toFindReplaceValue = refExpression -> {
+            if (permitTypeFilter.test(refExpression)) {
+                return Optional.of(FindReplaceValue.of(refExpression.getText(),
+                        FindReplaceValue.wordBoundary(refExpression.getText()), refExpression.getText()));
+            }
+            return Optional.empty();
+        };
+
         return PsiTreeUtil.collectElementsOfType(root, JSReferenceExpression.class).stream()
-                .filter(permitTypeFilter)
-                .map(PsiQualifiedReference::getReferenceName)
+                .map(toFindReplaceValue)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .distinct()
                 .collect(Collectors.toList());
     }

@@ -1,7 +1,5 @@
 package codeInsight.codeGeneration;
 
-import settings.TypeAssistApplicationSettings;
-
 /**
  * Created by matt on 29-May-17.
  */
@@ -15,7 +13,7 @@ public interface CodeGenerator {
 
     static String wrapInQuotesIfGeneric(String value) {
         if (value.contains("<")) {
-            String quote = TypeAssistApplicationSettings.getInstance().STRING_STYLE.getStyleToken();
+            String quote = "\"";
             return quote + value + quote;
         }
         return value;

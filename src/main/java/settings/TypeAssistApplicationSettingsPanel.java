@@ -2,7 +2,7 @@ package settings;
 
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.ui.JBColor;
-import documentation.HtmlUtils;
+import documentation.textReplacement.HtmlUtils;
 
 import javax.swing.*;
 import javax.swing.colorchooser.AbstractColorChooserPanel;

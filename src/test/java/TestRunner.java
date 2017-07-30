@@ -1,3 +1,4 @@
+import variableAssignment.LightAssignTypeToVariableIntentionTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -7,6 +8,7 @@ import org.junit.runners.Suite;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
         LightTypeAssistDocumentationProviderTest.class,
+        LightAssignTypeToVariableIntentionTest.class,
         HtmlUtilsTest.class
 })
 public class TestRunner {

@@ -41,8 +41,13 @@ public class WrapExpressionInStringIntention extends PsiElementBaseIntentionActi
         PsiElement element = expressionStatement == null ? referenceExpression : expressionStatement;
         if (element == null) return;
 
-        String transformedCode = String.format("%s%s%s", settings.STRING_STYLE.getStyleToken(), element.getText(),
-                settings.STRING_STYLE.getStyleToken());
+        // Exclude putting the semi colon in quotes if it exists.
+        boolean endsWithSemiColon = element.getText().endsWith(";");
+        String quotedValue = endsWithSemiColon ? element.getText().substring(0, element.getText().length() - 1) : element.getText();
+        String endSemiColon = endsWithSemiColon ? ";" : "";
+
+        String transformedCode = String.format("%s%s%s%s", settings.STRING_STYLE.getStyleToken(), quotedValue,
+                settings.STRING_STYLE.getStyleToken(), endSemiColon);
 
         WriteCommandAction.runWriteCommandAction(project, () -> {
             Document document = editor.getDocument();
