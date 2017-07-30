@@ -62,7 +62,7 @@
       <category>Typescript Type Assist</category>
     </intentionAction>
     <intentionAction>
-      <className>intentions.AssignVariableIntention</className>
+      <className>intentions.variableAssignment.AssignVariableIntention</className>
       <category>Typescript Type Assist</category>
     </intentionAction>
   </extensions>
