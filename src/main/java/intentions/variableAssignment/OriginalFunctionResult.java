@@ -27,33 +27,38 @@ import java.util.stream.Collectors;
  */
 public class OriginalFunctionResult {
     private List<CallExpressionWithArgs> callExpressions;
+    private List<String> actualGenericTypeValues;
 
-    private OriginalFunctionResult(List<CallExpressionWithArgs> callExpressions) {
+    private OriginalFunctionResult(List<CallExpressionWithArgs> callExpressions, List<String> actualGenericTypeValues) {
         this.callExpressions = callExpressions;
+        this.actualGenericTypeValues = actualGenericTypeValues;
     }
 
     public static Optional<OriginalFunctionResult> of(List<CallExpressionWithArgs> callExpressions) {
-        return callExpressions.isEmpty() ? Optional.empty() : Optional.of(new OriginalFunctionResult(callExpressions));
+        if (callExpressions.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new OriginalFunctionResult(callExpressions, getActualGenericTypeValues(callExpressions)));
     }
 
     public List<CallExpressionWithArgs> getCallExpressions() {
         return callExpressions;
     }
 
-    public int indexOfLastCallExpression() {
-        return callExpressions.size() - 1;
-    }
-
-    public List<String> getCallExpressionAsStrings() {
-        return callExpressions.stream().map(CallExpressionWithArgs::getArguments).collect(Collectors.toList());
-    }
-
-    public JSCallExpression getRootCallExpression() {
+    private static JSCallExpression getRootCallExpression(List<CallExpressionWithArgs> callExpressions) {
         return callExpressions.get(0).getJsCallExpression();
     }
 
+    public List<String> getActualGenericTypeValues() {
+        return actualGenericTypeValues;
+    }
+
     /**
-     * {@code doStuff<string, number, Cat>} ....
+     * In the list of call expressions which are function calls such as {@code doStuff<string, number, Cat>},
+     * find the call expression that has the concrete generic type argument values. It's always expected that
+     * out of many call expressions, there will be only 1 containing the concrete type values to handle cases where
+     * a series of calls to variables assigned to functions.
+     *
      *
      * <pre>
      *     The first call expression should be provided, as that is the one that contains the TypescriptTypeArgumentList.
@@ -67,8 +72,12 @@ public class OriginalFunctionResult {
      *
      * @return List of the type parameters such as List(string, number, Cat).
      */
-    public List<String> getActualGenericTypeValues() {
-        return PsiTreeUtil.findChildrenOfType(getRootCallExpression(), TypeScriptTypeArgumentList.class).stream()
+    private static List<String> getActualGenericTypeValues(List<CallExpressionWithArgs> callExpressions) {
+        return callExpressions.stream()
+                .map(call -> Optional.ofNullable(PsiTreeUtil.findChildOfType(getRootCallExpression(callExpressions), TypeScriptTypeArgumentList.class)))
+                .filter(Optional::isPresent)
+                .limit(1)
+                .map(Optional::get)
                 .map(TypeScriptTypeArgumentList::getTypeArguments)
                 .flatMap(Arrays::stream)
                 .map(PsiElement::getText)

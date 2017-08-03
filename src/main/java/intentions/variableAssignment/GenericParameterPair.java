@@ -3,7 +3,11 @@ package intentions.variableAssignment;
 import com.intellij.openapi.util.Pair;
 
 /**
- * T -> string
+ * Pairs up a generic type it its concrete value.
+ *
+ * <pre>
+ *     T -> string
+ * </pre>
  */
 public class GenericParameterPair {
     private String genericType;

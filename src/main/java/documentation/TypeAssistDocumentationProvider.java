@@ -77,7 +77,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
     /**
      * Replaces all readonly keywords with the equivalent html span.
      *
-     * @param value The value to format such as the full type signature.
+     * @param value The value to format such as the full type getSignature.
      * @return The formatted String should readonly exist otherwise the supplied value without modification.
      */
     public String replaceReadOnly(String value) {
@@ -123,7 +123,7 @@ public class TypeAssistDocumentationProvider extends AbstractDocumentationProvid
      * <p>String replacement is used as its simpler than recreating the complete type based on going through the
      * {@code PsiElement}.</p>
      *
-     * @param value The value to format such as the full type signature.
+     * @param value The value to format such as the full type getSignature.
      * @return The formatted String should any optionals exist otherwise the supplied value without modification.
      */
     public String replaceOptionals(String value) {

@@ -3,8 +3,12 @@ package intentions.variableAssignment;
 import com.intellij.codeInsight.highlighting.HighlightManager;
 import com.intellij.codeInsight.intention.HighPriorityAction;
 import com.intellij.codeInsight.intention.PsiElementBaseIntentionAction;
-import com.intellij.lang.javascript.psi.*;
-import com.intellij.lang.javascript.psi.ecma6.*;
+import com.intellij.lang.javascript.psi.JSExpressionStatement;
+import com.intellij.lang.javascript.psi.JSReferenceExpression;
+import com.intellij.lang.javascript.psi.JSType;
+import com.intellij.lang.javascript.psi.ecma6.TypeScriptFunction;
+import com.intellij.lang.javascript.psi.ecma6.TypeScriptPropertySignature;
+import com.intellij.lang.javascript.psi.ecma6.TypeScriptVariable;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Caret;
 import com.intellij.openapi.editor.Document;
@@ -20,13 +24,11 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.IncorrectOperationException;
 import icons.PluginIcons;
-import intentions.variableAssignment.evaluators.AnonymousFunctionEvaluator;
-import intentions.variableAssignment.evaluators.ReturnTypeEvaluator;
-import intentions.variableAssignment.evaluators.StandardFunctionEvaluator;
-import intentions.variableAssignment.evaluators.FullTypeFunctionEvaluator;
-import intentions.variableAssignment.functions.FunctionExpression;
-import intentions.variableAssignment.functions.FunctionValue;
-import intentions.variableAssignment.functions.StandardFunction;
+import intentions.variableAssignment.evaluators.FunctionTypeEvaluator;
+import intentions.variableAssignment.evaluators.TypeEvaluator;
+import intentions.variableAssignment.resolvers.FunctionDeclarationResolveResult;
+import intentions.variableAssignment.resolvers.FunctionDeclarationResolver;
+import intentions.variableAssignment.resolvers.ResolveUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import settings.TypeAssistApplicationSettings;
@@ -35,27 +37,6 @@ import utils.AppUtils;
 import javax.swing.*;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-
-            /*
-             * When the resolved variable is a variable, it can be assigned to 4 different expressions.
-             *
-             *               [      TypeScriptFunctionExpression        ]     No explicit type signature
-             * const addMe = (a: number) => (b: number): number => a + b;
-             *
-             *           [       TypeScriptFunctionType                     ]
-             * const me: (a: string) => (b: string) => (c: number) => boolean = special<string, string, number, boolean>("a", "b");
-             *
-             * // p4 is assigned to a JSCallExpression to the function print4, therefore the call is the type of p4.
-             * // The user doesn't need to put type info in, but if you create another variable and assign it to p4, this intention puts type info in.
-             * const p4 = print4<string, number>()("4", 5)("sss")
-             * p4
-             *
-             * // single type
-             * const hi = 'hhhhiii'
-             *
-             */
 
 /**
  * https://github.com/JetBrains/intellij-community/blob/master/java/java-impl/src/com/intellij/codeInsight/intention/impl/IntroduceVariableIntentionAction.java
@@ -67,18 +48,15 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
     private final Set<String> invalidReturnTypes = new HashSet<>(Arrays.asList("any", "void", "undefined", "null", "never"));
     private final String TEMP_VAR_PLACEHOLDER = "val";
 
-
     @Override
     public void invoke(@NotNull Project project, Editor editor, @NotNull PsiElement psiElement) throws IncorrectOperationException {
         if (editor == null) return;
 
-        JSExpressionStatement originalExpression = getExpression(psiElement);
+        JSExpressionStatement originalExpression = ResolveUtils.getExpression(psiElement);
         if (originalExpression == null) return;
 
         Caret caret = editor.getCaretModel().getCurrentCaret();
         Document document = editor.getDocument();
-
-        String varType = TypeAssistApplicationSettings.getInstance().VARIABLE_DECLARATION.getCode();
         TextRange range = originalExpression.getTextRange();
 
         Consumer<String> writeCommand = value ->
@@ -87,6 +65,7 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
                     document.insertString(range.getStartOffset(), value);
                     caret.moveToOffset(range.getStartOffset() + value.length());
                     PsiDocumentManager.getInstance(project).commitDocument(document);
+                    repositionCaret(project, document, editor, range);
                 });
 
         JSReferenceExpression reference = PsiTreeUtil.findChildOfType(originalExpression, JSReferenceExpression.class);
@@ -99,206 +78,88 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
         System.out.println();
 
         if (resolvedElement instanceof TypeScriptPropertySignature) {
-            System.out.println("resolvedElement instanceof TypeScriptPropertySignature");
             TypeScriptPropertySignature property = (TypeScriptPropertySignature) resolvedElement;
-
-            String type = property.getType() == null ? "any" : property.getType().getTypeText();
-            String assignment = varType + " " + property.getMemberName() + ": " + type + " = " + originalExpression.getText();
-            writeCommand.accept(assignment);
+            String returnType = property.getType() == null ? "any" : property.getType().getTypeText();
+            writeCommand.accept(createVarAssignment(returnType, property.getName(), originalExpression.getText()));
             return;
         }
 
         if (resolvedElement instanceof TypeScriptVariable) {
             System.out.println("##########################   resolvedElement instanceof TypeScriptVariable");
 
-            TypeScriptVariable resolvedTypescriptVariable = (TypeScriptVariable) resolvedElement;
+            Optional<TypeEvaluator> evaluator = FunctionDeclarationResolver
+                    .functionDeclarationTypeEvaluator(originalExpression, resolvedElement)
+                    .getTypeEvaluator();
 
-            List<FunctionValue> functionValues = getFunctionValues(resolvedTypescriptVariable);
-            if (!functionValues.isEmpty()) {
-
-                // TypescriptFunctionExpression section
-                System.out.println("MUST BE LOOKING FOR functionTypes or functionExpression");
-
-                Optional<OriginalFunctionResult> originalFunctionResult = OriginalFunctionResult.of(getCallExpressions(originalExpression));
-                Optional<ResolvedFunctionResult> resolvedFunctionResult = ResolvedFunctionResult.of(functionValues);
-
-                System.out.println("----- originalFunctionResult");
-                System.out.println(originalFunctionResult);
-                System.out.println("----- resolvedFunctionResult");
-                System.out.println(resolvedFunctionResult);
-                System.out.println();
-
-                if (!resolvedFunctionResult.isPresent()) {
-                    System.out.println("resolvedFunctionResult is empty");
-                    // The resolved variable has no function expression so just assign the new variable to the resolved function.
-                    writeCommand.accept(createUntypedVarAssignment(resolvedTypescriptVariable.getName()));
-                    repositionCaret(project, document, editor, range);
-                    return;
-                }
-
-                if (!originalFunctionResult.isPresent()) {
-                    System.out.println("originalFunctionResult is empty");
-                    // The original variable is not invoking the resolved function, therefore assigned the full type.
-                    String returnType = new FullTypeFunctionEvaluator(resolvedFunctionResult.get()).evaluate();
-                    System.out.println("RETURN TYPE: " + returnType);
-                    writeCommand.accept(createVarAssignment(returnType, resolvedTypescriptVariable.getName()));
-                    repositionCaret(project, document, editor, range);
-                    return;
-                }
-
-
-                String returnType = new AnonymousFunctionEvaluator(originalFunctionResult.get(), resolvedFunctionResult.get()).evaluate();
-                System.out.println("******  RETURN TYPE should be: " + returnType);
-
-
-//                String returnType = functionTypes.getReturnType(originalCallExpressions);
-//                System.out.println("Return type should be....: " + returnType);
-//                writeCommand.accept(createVarAssignment(returnType, resolvedTypescriptVariable.getName() + toCallExpressionCode(originalCallExpressions)));
-//                repositionCaret(project, document, editor, range);
+            if (evaluator.isPresent()) {
+                System.out.println("TypeScriptVariable: evaluator found");
+                writeCommand.accept(createVarAssignment(evaluator.get().evaluate(), originalExpression.getText()));
                 return;
             }
-
-            // If there are no functions, check for other possible types.
-            // const p4 = print4<string, number>()("4", 5)("sss") - variable assigned to call expression.
-            System.out.println("Function types is empty, checking if variable is assigned to a JSCallExpression");
-
-            // const p4 = print<string, number>()("4", 5)("sss") -> [(4, 5), (ssss)]
-            Optional<OriginalFunctionResult> originalFunctionOptional =
-                    OriginalFunctionResult.of(getCallExpressions(resolvedTypescriptVariable));
-
-            if (originalFunctionOptional.isPresent()) {
-                OriginalFunctionResult originalFunctionResult = originalFunctionOptional.get();
-
-
-                Optional<ResolvedFunctionResult> resolvedFunctionResult = Optional.of(originalFunctionResult.getRootCallExpression())
-                        .flatMap(callExpression -> Optional.ofNullable(PsiTreeUtil.findChildOfType(callExpression, JSReferenceExpression.class))
-                                .flatMap(ref -> Optional.ofNullable(ref.resolve()))
-                                .filter(resolved -> (resolved instanceof TypeScriptFunction))
-                                .map(resolved -> (TypeScriptFunction) resolved)
-                                .flatMap(function -> ResolvedFunctionResult.of(getGenericTypeParameters(function), getFunctionValues(function))));
-
-
-//                Optional<ResolvedFunctionResult> resolvedFunctionResult = Optional.of(originalFunctionResult.getRootCallExpression())
-//                        .flatMap(callExpression -> Optional.ofNullable(PsiTreeUtil.findChildOfType(callExpression, JSReferenceExpression.class))
-//                                .flatMap(ref -> Optional.ofNullable(ref.resolve()))
-//                                .filter(resolved -> (resolved instanceof TypeScriptFunction))
-//                                .map(resolved -> (TypeScriptFunction) resolved)
-//                                .map(function -> ResolvedFunctionResult.of(getGenericTypeParameters(function), getResolvedStandardFunctions(function))));
-
-                System.out.println("RESULT  SO FAR?");
-                System.out.println("-------- originalFunctionResult: ");
-                System.out.println(originalFunctionResult);
-                System.out.println("-------- resolvedFunctionResult: ");
-                System.out.println(resolvedFunctionResult);
-                System.out.println();
-                new ReturnTypeEvaluator2(originalFunctionResult, resolvedFunctionResult.get()).evaluate();
-
-
-//                        .flatMap(callExpression -> Optional.ofNullable(PsiTreeUtil.findChildOfType(callExpression, JSReferenceExpression.class))
-//                                .flatMap(ref -> Optional.ofNullable(ref.resolve()))
-//                                .flatMap(resolved -> toFunctionComponents(getActualGenericTypeValues(callExpression), resolved)));
-
-
-//                System.out.println("---------- functionComponents");
-//                System.out.println(functionComponents2);
-//                System.out.println();
-//
-////                Optional<String> resolvedReturnValue = Optional.ofNullable(PsiTreeUtil.findChildOfType(variable, JSCallExpression.class))
-////                        .flatMap(callExpression -> Optional.ofNullable(PsiTreeUtil.findChildOfType(callExpression, JSReferenceExpression.class))
-////                                .flatMap(ref -> Optional.ofNullable(ref.resolve()))
-////                                .flatMap(resolved -> toFunctionComponents(getActualGenericTypeValues(callExpression), resolved)))
-////                        .map(functionComponents -> functionComponents.getFullyResolvedReturnType(this::replace));
-//
-//                if (resolvedReturnValue.isPresent()) {
-//                    writeCommand.accept(createVarAssignment(resolvedReturnValue.get(), variable.getName()));
-//                    repositionCaret(project, document, editor, range);
-//                    return;
-//                }
-//
-//                System.out.println("------------- Function resolvedReturnValue is: ");
-//                System.out.println(resolvedReturnValue);
-            }
-
-
-            System.out.println("Call expression is empty, must be a single type or literal type");
-            // Must be the simplest cases of just a single type.
-            TypeScriptSingleType singleType = PsiTreeUtil.findChildOfType(resolvedTypescriptVariable, TypeScriptSingleType.class);
-            if (singleType != null) {
-                writeCommand.accept(createVarAssignment(singleType.getText(), resolvedTypescriptVariable.getName()));
-                repositionCaret(project, document, editor, range);
-                return;
-            }
-
-            JSLiteralExpression literalExpression = PsiTreeUtil.findChildOfType(resolvedTypescriptVariable, JSLiteralExpression.class);
-            if (literalExpression != null) {
-                writeCommand.accept(createUntypedVarAssignment(resolvedTypescriptVariable.getName()));
-                repositionCaret(project, document, editor, range);
-                return;
-            }
+            System.out.println("No action was done in TypeScriptVariable");
             return;
-
-
         }
 
         if (resolvedElement instanceof TypeScriptFunction) {
+            System.out.println();
+            System.out.println();
             System.out.println("resolvedElement instanceof TypeScriptFunction");
+
+
             TypeScriptFunction resolvedFunction = (TypeScriptFunction) resolvedElement;
 
-            // isAvailable does check for a call expression to exist, but double check here anyway.
-            Optional<OriginalFunctionResult> originalFunctionResult = OriginalFunctionResult.of(getCallExpressions(originalExpression));
+//            Optional<OriginalFunctionResult> originalFunctionResult = OriginalFunctionResult.of(ResolveUtils.getCallExpressions(originalExpression));
+//
+//            // Any generic types of the resolved function such as <T, U>
+//            List<String> genericTypeParameters = ResolveUtils.getGenericTypeParameters(resolvedFunction);
+//
+//            // There must be some type of function type or expression to the right of the function name.
+//            Optional<ResolvedFunctionResult> resolvedFunctionResult = ResolvedFunctionResult.of(genericTypeParameters, ResolveUtils.getFunctionValue(resolvedFunction));
+//
+//            System.out.println("-------- optionalOriginalFunctionResult: ");
+//            System.out.println(originalFunctionResult);
+//            System.out.println("-------- resolvedFunctionResult: ");
+//            System.out.println(resolvedFunctionResult);
+//            System.out.println();
 
-            // Any generic types of the resolved function such as <T, U>
-            List<String> genericTypeParameters = getGenericTypeParameters(resolvedFunction);
+            FunctionDeclarationResolveResult resolveResult = FunctionDeclarationResolver
+                    .functionDeclarationTypeEvaluator(originalExpression, resolvedFunction);
 
-            // There must be some type of function type or expression to the right of the function name.
-            Optional<ResolvedFunctionResult> resolvedFunctionResult = ResolvedFunctionResult.of(genericTypeParameters, getFunctionValues(resolvedFunction));
-
-            System.out.println("-------- originalFunctionResult: ");
-            System.out.println(originalFunctionResult);
-            System.out.println("-------- resolvedFunctionResult: ");
-            System.out.println(resolvedFunctionResult);
-            System.out.println();
-
-            if (!originalFunctionResult.isPresent() && !resolvedFunctionResult.isPresent()) {
-                System.out.println("No call expressions and no function types - Occurs when a variable is assigned to an uncalled function");
-                // No call expressions and no function types - Occurs when a variable is assigned to an uncalled function
-                String params = resolvedFunction.getParameterList() == null ? "()" : resolvedFunction.getParameterList().getText();
-                String returnType = resolvedFunction.getReturnType() == null ? "any" : resolvedFunction.getReturnType().getTypeText(JSType.TypeTextFormat.CODE);
-                writeCommand.accept(createParameterAssignment(params, returnType, resolvedFunction.getName()));
-                repositionCaret(project, document, editor, range);
+            if (resolveResult.getTypeEvaluator().isPresent()) {
+                TypeEvaluator evaluator = resolveResult.getTypeEvaluator().get();
+                writeCommand.accept(createVarAssignment(evaluator.evaluate(), originalExpression.getText()));
                 return;
             }
 
-            if (!originalFunctionResult.isPresent() && resolvedFunctionResult.isPresent()) {
-                System.out.println("No call expressions but its still possible for return values.");
-                // No call expressions but has function return types
-                String returnType = new FullTypeFunctionEvaluator(resolvedFunctionResult.get()).evaluate();
-                writeCommand.accept(createVarAssignment(returnType, originalExpression.getText()));
-                repositionCaret(project, document, editor, range);
-                return;
-            }
+//            // No function return type but the original and resolved function results can be used to extract any generic type info.
+//            Optional<OriginalFunctionResult> originalFunctionResult = resolveResult.getOriginalFunctionResult();
+//            Optional<ResolvedFunctionResult> resolvedFunctionResult = resolveResult.getResolvedFunctionResult();
+//
+//            // We now know that the resolvedFunction does not have a function type.
+//            if (!originalFunctionResult.isPresent()) {
+//                System.out.println("No call expressions and no function types - Occurs when a variable is assigned to an uncalled function");
+//                // No call expressions and no function types - Occurs when a variable is assigned to an uncalled function
+//                String params = resolvedFunction.getParameterList() == null ? "()" : resolvedFunction.getParameterList().getText();
+//                String returnType = resolvedFunction.getReturnType() == null ? "any" : resolvedFunction.getReturnType().getTypeText(JSType.TypeTextFormat.CODE);
+//                writeCommand.accept(createParameterAssignment(params, returnType, resolvedFunction.getName()));
+//                return;
+//            }
+//
+//            System.out.println("There are call expressions but the return type is something other than a function");
+//            // There are call expressions but the return type is something other than a function.
+//            // isAvailable checks for a missing return type but checking again to suppress ide errors
+//            if (resolvedFunction.getReturnType() == null || !resolvedFunctionResult.isPresent()) return;
+//
+//            // Allows replacing generic types with their concrete values.
+//            List<GenericParameterPair> genericParameters = AppUtils.zipInto(resolvedFunctionResult.get().getActualGenericTypeValues(),
+//                    originalFunctionResult.get().getActualGenericTypeValues(), GenericParameterPair::new);
+//
+//            String returnType = TypeEvaluator.replace(ResolveUtils.getFunctionReturnType(resolvedFunction), genericParameters);
+//            writeCommand.accept(createVarAssignment(returnType, originalExpression.getText()));
 
-            if (originalFunctionResult.isPresent() && resolvedFunctionResult.isPresent()) {
-                // Call expressions with function return types
-                System.out.println("BOTH call expressions and function values");
-
-                String returnType = new StandardFunctionEvaluator(originalFunctionResult.get(), resolvedFunctionResult.get()).evaluate();
-                writeCommand.accept(createVarAssignment(returnType, originalExpression.getText()));
-                repositionCaret(project, document, editor, range);
-                return;
-            }
-
-            System.out.println("There are call expressions but the return type is something other than a function");
-            // There are call expressions but the return type is something other than a function.
-            // isAvailable checks for a missing return type but checking again to suppress ide errors
-            if (resolvedFunction.getReturnType() == null) return;
-            List<GenericParameterPair> genericParameters = AppUtils.zipInto(genericTypeParameters,
-                    originalFunctionResult.get().getActualGenericTypeValues(), GenericParameterPair::new);
-
-            String returnType = ReturnTypeEvaluator.replace(resolvedFunction.getReturnType().getTypeText(JSType.TypeTextFormat.CODE), genericParameters);
-            writeCommand.accept(createVarAssignment(returnType, originalExpression.getText()));
-            repositionCaret(project, document, editor, range);
         }
+
+        System.out.println("---------------- nothing was done");
     }
 
 
@@ -310,7 +171,7 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
             return false;
         }
 
-        JSExpressionStatement expression = getExpression(psiElement);
+        JSExpressionStatement expression = ResolveUtils.getExpression(psiElement);
         if (expression == null) return false;
 
         JSReferenceExpression reference = PsiTreeUtil.findChildOfType(expression, JSReferenceExpression.class);
@@ -326,9 +187,6 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
         }
 
         if (resolvedElement instanceof TypeScriptFunction) {
-//            JSCallExpression callExpression = PsiTreeUtil.findChildOfType(expression, JSCallExpression.class);
-//            if (callExpression == null) return false;
-
             TypeScriptFunction function = (TypeScriptFunction) resolvedElement;
             if (function.getReturnType() == null) return false;
             String type = function.getReturnType().getTypeText(JSType.TypeTextFormat.CODE);
@@ -356,31 +214,42 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
     }
 
 
-//    private Optional<FunctionComponents> toFunctionComponents(@NotNull List<String> genericTypeActualValues, PsiElement psiElement) {
-//        System.out.println("toFunctionComponents");
-//        if (psiElement instanceof TypeScriptFunction) {
-//            System.out.println("toFunctionComponents psiElement instanceof TypeScriptFunction");
-//            return Optional.of(collectFunctionComponents(genericTypeActualValues, (TypeScriptFunction) psiElement));
-//        }
-//        return Optional.empty();
-//    }
-//
 //    /**
+//     * Indirect function just means the {@code originalElement} variable is assigned to a variable that could be
+//     * referring to a function. In which case we want to know the full type by resolving until we hit a concrete
+//     * function declaration that can tell us the type information.
 //     *
-//     * @param genericTypeActualValues If the generic types are [T, U], then this list will contain what the concrete
-//     *                               types are such as [string, number] that will be substituted into the corresponding
-//     *                               positions in the resolved function,
-//     * @param function The function in which to collect all the components from.
+//     * <p>The {@code resolvedElement} can either be a {@code TypeScriptFunction} or {@code TypeScriptFunctionExpression}
+//     * otherwise an empty {@code Optional} will be returned.</p>
+//     *
+//     * <p>First check if the {@code resolvedElement} is a function expression such as a lambda. If its not then use the
+//     * {@code FunctionDeclarationResolver} to recurse up to try find the original function declaration.</p>
 //     */
-//    private FunctionComponents collectFunctionComponents(@NotNull List<String> genericTypeActualValues,
-//                                                         @NotNull TypeScriptFunction function) {
-//        List<String> genericTypes = getGenericTypeParameters(function);
+//    private Optional<TypeEvaluator> tryResolveIndirectFunction(@NotNull PsiElement originalElement, @NotNull PsiElement resolvedElement) {
+//        /*
+//         * Append call expressions from the original element to those of the resolvedElement. This rebuilds the list
+//         * of all partially applied function calls should any exist. The total number of function calls is what
+//         * determines the return type hence this must account for all calls. This is done to account for a partially
+//         * applied lambda.
+//         */
+//        System.out.println("in tryResolveIndirectFunction");
+//        System.out.println("originalElement: " + originalElement.getText());
+//        System.out.println("resolvedElement: " + resolvedElement.getText());
 //
-//        List<Pair<String, String>> genericTypeReplacementPairs =
-//                AppUtils.zipInto(genericTypes, genericTypeActualValues, (genericType, typeValue) ->
-//                        new GenericParameterPair(genericType, typeValue).getReplacementInstruction());
+////        List<CallExpressionWithArgs> callExpressions = ResolveUtils.getCallExpressions(resolvedElement);
+////        callExpressions.addAll(ResolveUtils.getCallExpressions(originalElement));
+////
+////        Optional<OriginalFunctionResult> originalFunctionResult = OriginalFunctionResult.of(callExpressions);
+////
+////        Optional<ResolvedFunctionResult> resolvedFunctionResult =
+////                ResolvedFunctionResult.of(ResolveUtils.getGenericTypeParameters(resolvedElement), ResolveUtils.getFunctionExpression(resolvedElement));
 //
-//        return new FunctionComponents(genericTypes, genericTypeActualValues, genericTypeReplacementPairs, getResolvedStandardFunctions(function));
+//        return FunctionDeclarationResolver.functionDeclarationTypeEvaluator(originalElement, resolvedElement).getTypeEvaluator();
+//
+////        // resolvedElement is a function expression such as a lambda.
+////        return resolvedFunctionResult.<Optional<TypeEvaluator>>
+////                map(result -> Optional.of(new FunctionTypeEvaluator(originalFunctionResult, result)))
+////                .orElse(FunctionDeclarationResolver.functionDeclarationTypeEvaluator(originalElement, resolvedElement).getTypeEvaluator());
 //    }
 
     private void highlight(Project project, Editor editor, TextRange textRange) {
@@ -411,8 +280,12 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
     }
 
     private String createVarAssignment(String returnType, String expression) {
+        return createVarAssignment(returnType, TEMP_VAR_PLACEHOLDER, expression);
+    }
+
+    private String createVarAssignment(String returnType, String variableName, String expression) {
         String varType = TypeAssistApplicationSettings.getInstance().VARIABLE_DECLARATION.getCode();
-        String assignment = varType + " " + TEMP_VAR_PLACEHOLDER + ": " + returnType + " = " + expression;
+        String assignment = varType + " " + variableName + ": " + returnType + " = " + expression;
         return terminateExpression(assignment);
     }
 
@@ -429,7 +302,7 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
     }
 
     /**
-     * Formats the expression based on {@code TypeAssistApplicationSettings} end with semi colon option,
+     * Formats the expression based on {@code TypeAssistApplicationSettings} end with semi colon option.
      */
     private String terminateExpression(String expression) {
         if (TypeAssistApplicationSettings.getInstance().END_WITH_SEMI_COLON) {
@@ -438,103 +311,4 @@ public class AssignVariableIntention extends PsiElementBaseIntentionAction imple
         return expression.endsWith(";") ? expression.substring(0, expression.length() - 1) : expression;
     }
 
-    /**
-     * [(...), (...), (...)] converts into (...)(...)(...)
-     */
-    private String toCallExpressionCode(List<CallExpressionWithArgs> callExpressions) {
-        return callExpressions.stream().map(CallExpressionWithArgs::getArguments).collect(Collectors.joining(""));
-    }
-
-    /**
-     * {@code doStuff<T, U, V>} ....
-     *
-     * @return List of the type parameters such as List(T, U, V).
-     */
-    private List<String> getGenericTypeParameters(@NotNull TypeScriptFunction function) {
-        return Optional.ofNullable(function.getTypeParameterList())
-                .map(TypeScriptTypeParameterList::getTypeParameters)
-                .map(Arrays::stream)
-                .map(s -> s.map(TypeScriptTypeParameter::getName))
-                .map(params -> params.collect(Collectors.toList()))
-                .orElse(new ArrayList<>());
-    }
-
-    /**
-     * {@code doStuff<string, number, Cat>} ....
-     * <p>
-     * <pre>
-     *     The first call expression should be provided, as that is the one that contains the TypescriptTypeArgumentList.
-     *
-     *     // This contains 3 call expressions, any one can be used as they all contain the generic type argument list,
-     *     // However you should try use the first as its the simplest.
-     *     1. print4<string, number>()
-     *     2. print4<string, number>()("4", 5)
-     *     3. print4<string, number>()("4", 5)("sss")
-     * </pre>
-     *
-     * @return List of the type parameters such as List(string, number, Cat).
-     */
-    private List<String> getActualGenericTypeValues(@NotNull JSCallExpression callExpression) {
-        return PsiTreeUtil.findChildrenOfType(callExpression, TypeScriptTypeArgumentList.class).stream()
-                .map(TypeScriptTypeArgumentList::getTypeArguments)
-                .flatMap(Arrays::stream)
-                .map(PsiElement::getText)
-                .collect(Collectors.toList());
-    }
-
-
-    private JSExpressionStatement getExpression(@NotNull PsiElement psiElement) {
-        JSExpressionStatement parentExpression = PsiTreeUtil.getTopmostParentOfType(psiElement, JSExpressionStatement.class);
-        if (parentExpression != null) return parentExpression;
-        return (psiElement.getPrevSibling() instanceof JSExpressionStatement) ? (JSExpressionStatement) psiElement.getPrevSibling() : null;
-    }
-
-    /**
-     * Collects all {@code JSCallExpression}s and returns them in the reverse order to appear in the same order
-     * as they are applied to the function invocations.
-     * <p>
-     * <p>If a function returns curried functions it will look like this without reversing.</p>
-     * <pre>
-     *     {@code function doThis<A, B>(a: A, x: B): (b: B) => (c: A) => B}
-     *
-     *     {@code doThis<string, number>("#", "3")("4")}
-     *
-     *      callExpressions = [("4"), ("#", "3")] - in the opposite order as they are applied, so reverse fixes this.
-     * </pre>
-     */
-    private List<CallExpressionWithArgs> getCallExpressions(PsiElement expression) {
-        Function<JSCallExpression, Optional<CallExpressionWithArgs>> mapper = call ->
-                call.getArgumentList() == null ? Optional.empty() : Optional.of(new CallExpressionWithArgs(call));
-
-        return PsiTreeUtil.findChildrenOfType(expression, JSCallExpression.class).stream()
-                .map(mapper)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.collectingAndThen(Collectors.toList(), list -> {
-                    Collections.reverse(list);
-                    return list;
-                }));
-    }
-
-    private Optional<ResolvedFunctionTypes> getResolvedStandardFunctions(TypeScriptFunction function) {
-        if (function.getReturnType() != null &&
-                function.getReturnType().getSource().getSourceElement() instanceof TypeScriptFunction) {
-            TypeScriptFunction typeScriptFunction = (TypeScriptFunction) function.getReturnType().getSource().getSourceElement();
-            ResolvedFunctionTypes resolvedFunctionTypes = new ResolvedStandardFunctions(typeScriptFunction,
-                    PsiTreeUtil.findChildrenOfAnyType(typeScriptFunction, TypeScriptFunction.class));
-            return Optional.of(resolvedFunctionTypes);
-        }
-        return Optional.empty();
-    }
-
-
-    private List<FunctionValue> getFunctionValues(PsiElement element) {
-        List<FunctionValue> standardFunctions = PsiTreeUtil.findChildrenOfAnyType(element, TypeScriptFunctionType.class).stream()
-                .map(StandardFunction::new)
-                .collect(Collectors.toList());
-        if (!standardFunctions.isEmpty()) return standardFunctions;
-
-        return PsiTreeUtil.findChildrenOfAnyType(element, TypeScriptFunctionExpression.class).stream()
-                .map(FunctionExpression::new).collect(Collectors.toList());
-    }
 }

@@ -1,32 +1,47 @@
 package intentions.variableAssignment.functions;
 
-import com.intellij.lang.javascript.psi.ecma6.TypeScriptFunction;
+import java.util.List;
 
-public class FunctionExpression implements FunctionValue {
-    private TypeScriptFunction expression;
+/**
+ * A function expression is a lambda.
+ *
+ * <pre>
+ *     const addMe = (a: number) => (b: number): number => a + b
+ * </pre>
+ */
+public class FunctionExpression extends FunctionValue {
 
-    public FunctionExpression(TypeScriptFunction expression) {
-        this.expression = expression;
+    public FunctionExpression(String expression, List<String> genericTypes) {
+        super(expression, genericTypes);
     }
 
     @Override
-    public String signature() {
-
-
-        return expression.getText().replaceAll("\\):", ") =>");
-//        int lastIndex = expression.getText().lastIndexOf("=>");
-//        return expression.getText().substring(0, lastIndex).trim();
+    public String getSignature() {
+        /*
+         * An example of a function expression is
+         * const addMe = (a: number) => (b: number): number => a + b;
+         *               [           function expression            ]
+         *
+         * It needs to be formatted into a normal type signature.
+         * 1. Transform '(b: number): number' into is transformed into '(b: number) => number'
+         * 2. Remove the expression to the right of the last => which is 'a + b'
+         */
+        String formatted = signature.replaceAll("\\):", ") =>");
+        return formatted.substring(0, formatted.lastIndexOf("=>")).trim();
     }
 
     @Override
-    public String returnType() {
-        return "";
+    public List<String> getAllReturnTypes() {
+        return getAllReturnTypes(getSignature());
     }
 
-
+    @Override
+    public List<String> getActualGenericTypeValues() {
+        return actualGenericTypeValues;
+    }
 
     @Override
     public String toString() {
-        return signature();
+        return getSignature();
     }
 }

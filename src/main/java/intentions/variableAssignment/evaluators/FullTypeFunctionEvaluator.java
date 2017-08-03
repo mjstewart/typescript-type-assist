@@ -2,7 +2,11 @@ package intentions.variableAssignment.evaluators;
 
 import intentions.variableAssignment.ResolvedFunctionResult;
 
-public class FullTypeFunctionEvaluator extends ReturnTypeEvaluator {
+/**
+ * Out of all possible return types, return the first return type which represents an uncalled function or a function
+ * that has only been called with its initial arguments depending on the context.
+ */
+public class FullTypeFunctionEvaluator extends TypeEvaluator {
 
     public FullTypeFunctionEvaluator(ResolvedFunctionResult resolvedFunctionResult) {
         super(null, resolvedFunctionResult);
@@ -11,8 +15,6 @@ public class FullTypeFunctionEvaluator extends ReturnTypeEvaluator {
     @Override
     public String evaluate() {
         System.out.println("--- FullTypeFunctionEvaluator");
-        System.out.println(resolvedFunctionResult.getFunctionValues().get(0).signature());
-
-        return resolvedFunctionResult.getFunctionValues().get(0).signature();
+        return resolvedFunctionResult.getFunctionValue().getAllReturnTypes().get(0);
     }
 }

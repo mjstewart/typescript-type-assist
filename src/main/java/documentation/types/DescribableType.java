@@ -12,7 +12,7 @@ public interface DescribableType {
      * Some examples
      *
      * <ul>
-     * <li>{@code TypeScriptObjectProperty} = The full signature eg: 'firstName: string'</li>
+     * <li>{@code TypeScriptObjectProperty} = The full getSignature eg: 'firstName: string'</li>
      * <li>{@code HybridFunctionProperty} = The complete callable function expression - '(start: number): string'</li>
      * <li>{@code UnionOrIntersectionType} = The union or intersection value</li>
      * <li>{@code EnumField} = The enum value</li>

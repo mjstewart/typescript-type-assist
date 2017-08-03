@@ -2,7 +2,6 @@ import com.intellij.codeInsight.documentation.DocumentationManagerUtil;
 import com.intellij.testFramework.fixtures.LightCodeInsightFixtureTestCase;
 import documentation.HtmlUtils;
 import documentation.TypeAssistDocumentationProvider;
-import io.netty.util.internal.StringUtil;
 import settings.TypeAssistApplicationSettings;
 
 import java.util.Arrays;

@@ -1,7 +1,5 @@
 package utils;
 
-import com.intellij.openapi.util.Pair;
-
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -16,17 +14,5 @@ public class AppUtils {
         return IntStream.range(0, Math.min(a.size(), b.size()))
                 .mapToObj(i -> mapper.apply(a.get(i), b.get(i)))
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Find and replaces the {@code value} with the list of pairs containing the regex search key and replacement value.
-     *
-     * @return The new value with all tokens replaced with the new values.
-     */
-    public static String replace(String value, List<Pair<String, String>> replacementPairs) {
-        for (Pair<String, String> replacementPair : replacementPairs) {
-            value = value.replaceAll(replacementPair.first, replacementPair.second);
-        }
-        return value;
     }
 }

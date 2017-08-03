@@ -111,11 +111,11 @@ public abstract class TypeScriptObjectProperty implements DescribableType {
     }
 
     /**
-     * Given a {@code TypeScriptFunction}, construct the full function signature. This is done to avoid including
+     * Given a {@code TypeScriptFunction}, construct the full function getSignature. This is done to avoid including
      * the JSDocComment which occurs if you simply just print the text value of the function.
      *
      * @param typeScriptFunction The {@code TypeScriptFunction}
-     * @return The full function signature.
+     * @return The full function getSignature.
      */
     protected static String toFullSignature(TypeScriptFunction typeScriptFunction) {
         String functionName = typeScriptFunction.getName() == null ? "" : typeScriptFunction.getName();
